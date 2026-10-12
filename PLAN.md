@@ -1,253 +1,191 @@
-# PLAN — ToDoList Modernisation (G01 Structured Todo Model)
+# ToDoList Modernisation — Implementation Plan
+
+## Epic
+- **Epic:** EPMCDMETST-67232 — *ToDoList Modernisation - AI-driven SDLC*
+
+> Note: At time of writing, Jira shows **no Stories linked to the Epic** (no issues returned for `"Epic Link" = EPMCDMETST-67232`).  
+> The user referenced Story **EPMCDMETST-68567**, but it is **not currently linked** to the Epic per Jira search results. This plan proceeds using the key(s) provided by the user and should be updated once tickets are correctly linked.
+
+---
 
 ## Objective
-Modernise the ToDoList app’s persistence layer by replacing the legacy **array-of-strings** `localStorage` format with a **structured todo object model** with **stable IDs and metadata**, enabling reliable operations (delete/complete) even with duplicate titles and providing a foundation for future features (edit, sync, priorities, etc.).
-
-Primary business outcome: **Correctness and extensibility** of todo operations through a stable data model and backward-compatible migration.
+Modernise the ToDoList application by implementing **G01: persist todo completion state across reloads** using a stable data model and persistence mechanism, improving reliability and laying a foundation for future enhancements (IDs, metadata, backend API, testing).
 
 ---
 
 ## Scope
 
-### In scope (this release)
-- **G01**: Store todos in `localStorage` as structured objects with:
-  - `id` (stable unique string)
-  - `title` (string)
-  - `completed` (boolean)
-  - `createdAt` (ISO timestamp string)
-  - `updatedAt` (ISO timestamp string)
-- Backward-compatible **migration** on app load:
-  - If legacy storage contains `string[]`, migrate to `Todo[]` and persist back.
-- Update UI behaviors to rely on `todo.id` rather than `innerText` or array index:
-  - Add todo creates object and persists
-  - Toggle complete updates correct object and persists
-  - Delete removes by `id` and persists
-- Add/extend tests and/or a lightweight test plan to prove:
-  - Correct migration
-  - No duplicate-title deletion bug
-  - No regression of add/complete/delete
-- Documentation updates covering:
-  - Storage keys
-  - Schema
-  - Migration behavior and troubleshooting reset steps
+### In scope (this increment)
+- Implement **persistent completion state** for todos (G01).
+- Introduce/confirm a **structured Todo model** that includes `completed` (and ideally `id` to support future work safely).
+- Refactor UI logic to render completion state correctly on load.
+- Add automated tests covering persistence behavior.
+- Add minimal build/run documentation and scripts needed to execute and test reliably.
 
-### Out of scope (explicitly not in this release)
-- Backend/API, database, authentication, multi-user sync
-- Edit functionality, priorities, due dates, search/filter
-- UI/UX redesign, accessibility overhaul, theme refactor
-- CI/CD pipeline setup or containerisation
+### Out of scope (explicitly not delivered in this increment)
+- User accounts, authentication/authorization.
+- Cross-device sync or cloud hosting (unless persistence is implemented via a backend as part of the agreed approach).
+- Advanced features: due dates, priorities, tagging, recurring tasks, reminders, search/filter UI.
+- Full design overhaul or frontend framework migration (React/Vue/etc.).
+- Non-functional hardening beyond baseline (e.g., full OWASP review).
 
 ---
 
-## Target architecture (post-change)
+## Target Architecture (end-state direction)
+Two viable implementation approaches exist; the ticket should confirm which is intended.
 
-### Frontend modules (logical)
-- **storage layer** (new/updated): responsible for read/write/migrate
-- **domain model**: `Todo` type + helper functions
-- **UI binding**: render list items with `data-id="<todo.id>"` and drive actions via IDs
+### Option A (minimal): Enhanced local persistence (LocalStorage)
+- **Frontend:** vanilla JS renders Todo list from LocalStorage.
+- **Storage:** LocalStorage stores an array of objects (not strings):
+  ```json
+  [{ "id": "uuid", "title": "Buy milk", "completed": true, "createdAt": "..." }]
+  ```
+- **Pros:** simplest, no backend required.
+- **Cons:** still single-device; harder to evolve to shared state later.
 
-### Data model
-```ts
-type Todo = {
-  id: string;          // stable unique identifier
-  title: string;       // trimmed user-entered text
-  completed: boolean;  // completion status
-  createdAt: string;   // ISO datetime
-  updatedAt: string;   // ISO datetime
-};
-```
+### Option B (recommended for modernisation): Backend API + DB persistence
+- **Frontend:** static assets served by Node/Express (or separate static hosting).
+- **API:** REST endpoints `/api/todos`.
+- **DB:** SQLite (or other) persists `completed` state and future fields.
+- **Pros:** scalable to multi-device and future features; testable API.
+- **Cons:** more setup.
 
-### Persistence contract
-- `localStorage["todos"]` (or existing key if already present; document final choice) stores:
-  - JSON stringified `Todo[]`
-- Migration:
-  - Detect `string[]` and convert each string to a `Todo` object.
-  - Preserve display order as currently shown to users.
-  - Re-write storage as `Todo[]` once migrated.
+**Decision checkpoint:** M1 includes a lightweight architecture decision (AD) to select Option A vs B, aligned to the Epic’s "modernisation" intent.
 
 ---
 
 ## Milestones (M1–M4)
 
-> Estimates are in **story points** for milestones, and **timebox guidance** for subtasks where points are not defined in Jira. Owners are placeholders unless Jira assignees are set.
+> Estimates are in **story points (SP)** until team converts to hours/days. Owners are placeholders; replace with named individuals.
 
-| Milestone | Goal | Jira key(s) | Estimate | Owner |
-|---|---|---:|---|---|
-| **M1** | Confirm storage key, schema, and migration approach; agree acceptance criteria & edge cases | **EPMCDMETST-68567** | **5 SP** | Delivery Lead + Dev |
-| **M2** | Implement structured model + ID-based DOM binding + migration | **EPMCDMETST-68568** | ~1–2 dev days | Dev |
-| **M3** | Verification: tests (or test plan) for migration, persistence, duplicates; regression checks | **EPMCDMETST-68569** | ~0.5–1 dev day | QA/Dev |
-| **M4** | Documentation: schema, localStorage keys, migration behavior, troubleshooting/reset steps | **EPMCDMETST-68570** | ~0.25–0.5 dev day | Dev |
+| Milestone | Goal | Jira Keys | Estimate (SP) | Owner |
+|---|---|---:|---:|---|
+| **M1** | Confirm scope + architecture decision; agree data model and persistence approach | EPMCDMETST-68567 | 2 | Delivery Lead + Dev |
+| **M2** | Implement persistent `completed` state end-to-end (storage + render + toggle) | EPMCDMETST-68567 | 5 | Dev |
+| **M3** | Automated tests + regression coverage for persistence and rendering | EPMCDMETST-68567 | 3 | Dev + QA |
+| **M4** | Stabilisation: docs, CI-ready scripts, acceptance demo, DoD verification | EPMCDMETST-68567 | 2 | Dev + Delivery Lead |
 
----
-
-## Implementation plan (by Jira issue)
-
-### EPMCDMETST-68567 — Story: G01 structured todo storage
-**Key deliverables**
-- Finalise the `Todo` schema and storage key naming.
-- Define migration rules for legacy `string[]`:
-  - What constitutes “legacy” (e.g., parsed JSON is array of strings).
-  - Behavior on corrupted JSON.
-- Define acceptance test checklist.
-
-**Design notes**
-- Prefer an ID generation function with extremely low collision risk:
-  - Option A: `crypto.randomUUID()` when available; fallback to timestamp+random.
-- Ensure title is `trim()`med; decide whether to reject empty strings (current behavior uses alert—out of scope to redesign, but do not store empty items).
+> If additional Jira keys are created later (e.g., split into separate Stories/Tasks), update the table to list each key under the appropriate milestone.
 
 ---
 
-### EPMCDMETST-68568 — Sub-task: Implement object model + migration
-**Steps**
-1. Introduce `Todo` model and helper functions:
-   - `makeTodo(title): Todo`
-   - `serializeTodos(todos): string`
-   - `parseTodos(raw): Todo[] | legacy string[] | []`
-2. Implement storage functions:
-   - `loadTodos(): Todo[]` (includes migration)
-   - `saveTodos(todos: Todo[]): void`
-3. Update render logic:
-   - When creating `<li>`, attach `li.dataset.id = todo.id`
-   - Ensure completed state uses `todo.completed` to set CSS class.
-4. Update event handlers:
-   - Toggle complete:
-     - Find todo by `id`
-     - Flip `completed`
-     - Set `updatedAt`
-     - Persist + update UI
-   - Delete:
-     - Remove by `id` (filter by id)
-     - Persist + remove DOM node
-5. Migration:
-   - If legacy `string[]` detected:
-     - Convert each string entry to `Todo`
-     - Persist back to new format immediately
-     - Render converted list
+## Implementation Approach (high level)
 
-**Non-functional requirements**
-- Do not break existing theme selection and UI layout.
-- Maintain ordering of existing todos as loaded from legacy storage.
+### Data model
+Minimum fields to support G01 safely:
+- `id: string` (UUID or incremental) — strongly recommended to avoid duplicate-title issues later
+- `title: string`
+- `completed: boolean`
+- `createdAt: string (ISO)` (optional but helpful)
 
----
+### Frontend changes (both options)
+- Update todo creation to create object instead of string.
+- On toggle complete:
+  - update object `completed` and persist entire list.
+  - update DOM to reflect state.
+- On load:
+  - render list and apply completed styling based on persisted flag.
 
-### EPMCDMETST-68569 — Sub-task: Test G01 (persistence, migration, duplicates)
-**Approach**
-- If no test framework exists, produce a lightweight test plan + manual checklist in repo docs (or as comments) and optionally add a minimal test harness if feasible.
-- Recommended minimum verification:
-  1. **Create** todo persists as object with required fields and non-empty `id`.
-  2. **Migration** rewrites legacy `["A","B"]` to objects and still displays A/B.
-  3. **Duplicate titles**: delete one of two same-title entries deletes only one.
-  4. **Toggle complete** changes the correct item and persists across reload.
-
-**Artifacts**
-- If unit tests are added:
-  - Target pure functions: ID generation, migration, serialization/deserialization.
-- Manual regression checklist stored in documentation (ties into EPMCDMETST-68570).
-
----
-
-### EPMCDMETST-68570 — Sub-task: Documentation
-**Content to document**
-- The final localStorage key(s) used (e.g., `todos`)
-- The `Todo` schema and meanings for each field
-- Migration behavior:
-  - Trigger conditions
-  - What happens on malformed storage
-- Troubleshooting:
-  - How to clear todos (remove localStorage key in devtools)
-  - Expected symptoms if storage is corrupted
+### Persistence details
+- **Option A:** store JSON array of objects in LocalStorage under a single key, e.g. `todos`.
+- **Option B:** store in DB; LocalStorage only for theme preference.
 
 ---
 
 ## Dependencies
-- Browser environment support:
-  - `localStorage` availability (assumed)
-  - `crypto.randomUUID()` availability (implement fallback)
-- No external services required.
-- Team decision on final storage key naming (M1).
+- Access to Jira project EPMCDMETST and ability to update/link issues to Epic **EPMCDMETST-67232**.
+- Agreement on persistence approach (LocalStorage vs API/DB).
+- Node tooling availability if tests/CI scripts are introduced (recommended even for static apps).
 
 ---
 
-## Risks and mitigations
-
+## Risks & Mitigations
 | Risk | Impact | Likelihood | Mitigation |
 |---|---|---:|---|
-| Migration corrupts or loses user data | High | Medium | Implement safe parsing with try/catch; on failure, keep a backup key (e.g., `todos_legacy_backup`) before overwrite; verify migration with test cases |
-| ID collisions leading to wrong deletes/toggles | High | Low | Use `crypto.randomUUID()` when available; fallback includes randomness + timestamp; add guard to regenerate if duplicate in loaded set |
-| Regression in add/complete/delete flows | Medium | Medium | Maintain parity with current UX; run regression checklist; test duplicates scenario explicitly |
-| Malformed `localStorage` content breaks app load | Medium | Medium | Defensive parsing: if JSON invalid, treat as empty list and log to console; avoid throwing in load path |
+| Ticket not linked to Epic / unclear scope ownership | Plan tracking and reporting becomes inconsistent | Medium | Ensure **EPMCDMETST-68567** is linked to **EPMCDMETST-67232**; add clear acceptance criteria in Jira |
+| Data migration from old LocalStorage format (string array) breaks existing users’ data | Users lose todos or see errors | Medium | Implement **backward-compatible migration**: detect array of strings and convert to objects with `completed:false` |
+| Duplicate todo titles cause incorrect updates/deletes | Data corruption | Medium | Introduce and use `id` per todo even if not explicitly required for G01 |
+| Inconsistent UI state after refresh | Poor UX | Medium | Single render function from source-of-truth state; avoid DOM-only toggles |
+| Lack of tests leads to regressions | Rework | Medium | Add unit tests for storage migration + toggle persistence; add e2e smoke test |
 
 ---
 
-## Test strategy
+## Test Strategy
 
-### Automated (preferred where feasible)
-- Unit tests for pure functions:
-  - `migrateLegacyTodos(string[]) => Todo[]`
-  - `loadTodos` parsing behavior (mocked localStorage)
-  - ID generator uniqueness (basic sanity)
-- Minimal DOM behavior tests if environment allows; otherwise manual verification.
+### Unit tests (recommended)
+- Storage read/write:
+  - saves todo with `completed=true/false`.
+  - loads and renders `completed=true` as checked/line-through.
+- Migration:
+  - when LocalStorage has `["a","b"]`, converts to `[{id,title,completed:false},...]`.
+- Toggle behavior:
+  - toggling updates storage value, not only DOM.
 
-### Manual regression checklist (must pass)
-- Add todo:
-  - Adds to UI
-  - Persists as object with id + timestamps
-- Reload page:
-  - Todos load correctly with completed state
-- Toggle complete:
-  - Correct item toggles; persists after reload
-- Delete:
-  - Deletes correct item by id
-  - Duplicate titles: only one removed
+### Integration / e2e tests
+- Add todo -> refresh -> todo still present.
+- Mark complete -> refresh -> still complete.
+- Theme preference remains unchanged (regression).
+
+### Manual testing checklist
+- Create 3 todos; complete one; refresh; completion persists.
+- Existing LocalStorage from previous version migrates cleanly.
+- Works on latest Chrome/Edge/Firefox.
 
 ---
 
-## Build and deployment
+## Build & Deployment
 
-### Build
-- Static site: open `index.html` directly or serve via a local static server.
-- No bundler assumed for this scope; keep changes compatible with current structure.
+### Local development
+- If kept static: open `index.html` (or serve with a simple static server).
+- If Node introduced for tooling:
+  - `npm install`
+  - `npm test`
+  - `npm run start` (if a dev server is added)
+
+### CI readiness (minimal)
+- Provide deterministic commands:
+  - `npm ci`
+  - `npm test`
+- Ensure tests do not rely on network.
 
 ### Deployment
-- No deployment changes in scope.
-- Ensure changes work when hosted as static files (e.g., GitHub Pages style hosting).
+- Static hosting remains acceptable for Option A.
+- If Option B: deploy Node service with environment-based config; DB file persisted via volume.
 
 ---
 
-## HITL checkpoints (Human-in-the-loop)
-1. **After M1 (design checkpoint)**: confirm schema fields, storage key, and migration rules (especially malformed JSON handling and backup strategy).
-2. **After M2 (implementation checkpoint)**: reviewer verifies duplicate-title delete fix and confirms DOM uses `data-id`.
-3. **After M3 (quality checkpoint)**: reviewer signs off on test evidence (automated results or completed manual checklist).
-4. **Before merge (release checkpoint)**: reviewer confirms docs updated and no regressions observed.
+## HITL (Human-in-the-loop) Checkpoints
+1. **HITL-1 (M1):** Confirm persistence approach (Option A vs B), acceptance criteria, and migration expectations.
+2. **HITL-2 (M2):** Demo persistent completion state after refresh; confirm UI behavior meets expectations.
+3. **HITL-3 (M3):** Review automated test coverage and agree on minimum test set.
+4. **HITL-4 (M4):** Final acceptance review against DoD; confirm Jira updated/closed and Story linked to Epic.
 
 ---
 
 ## Definition of Done (DoD)
-- All Jira issues in scope are complete:
-  - EPMCDMETST-68568, EPMCDMETST-68569, EPMCDMETST-68570 resolved and linked to EPMCDMETST-68567
-- Todos persist as structured objects with stable IDs and required metadata.
-- Migration from legacy `string[]` happens automatically on load without user action.
-- Duplicate-title deletion removes only the selected todo.
-- Completed state is correctly persisted and reflected on reload.
-- Documentation is present and accurate for schema and migration.
-- Code follows branching and commit conventions below.
+- `completed` state persists after browser refresh and is correctly rendered.
+- Backward compatibility: existing LocalStorage format (if present) is migrated without data loss.
+- Code follows agreed conventions (see below).
+- Automated tests added and passing locally.
+- Documentation updated (how to run, test).
+- Jira Story has:
+  - clear acceptance criteria,
+  - implementation notes,
+  - linked to Epic EPMCDMETST-67232,
+  - moved to Done/Closed per workflow.
 
 ---
 
-## Branching strategy
-- Branch name format:
-  - `feature/<JIRA-KEY>-<slug>`
-- Examples:
-  - `feature/EPMCDMETST-68568-structured-todo-model`
-  - `feature/EPMCDMETST-68569-g01-tests`
-  - `feature/EPMCDMETST-68570-g01-docs`
+## Branching & Commit Conventions
+- **Branch naming:** `feature/<JIRA-KEY>-<slug>`
+  - Example: `feature/EPMCDMETST-68567-persist-completed-state`
+- **Commit message convention:** `<JIRA-KEY>: <message>`
+  - Example: `EPMCDMETST-68567: persist completed state in storage model`
 
 ---
 
-## Commit message convention
-- Format: `<JIRA-KEY>: <message>`
-- Examples:
-  - `EPMCDMETST-68568: store todos as objects with stable ids`
-  - `EPMCDMETST-68568: migrate legacy string array localStorage format`
-  - `EPMCDMETST-68569: add test plan for migration and duplicates`
-  - `EPMCDMETST-68570: document localStorage schema and migration behavior`
+## Appendix: Acceptance Criteria (proposed for EPMCDMETST-68567)
+1. When a user marks a todo as completed and reloads the page, the todo remains completed.
+2. Completion state is persisted in storage (not DOM-only).
+3. Existing stored todos from prior versions (string array) still load; they are migrated to the new structure.
+4. Automated test coverage exists for persistence + migration behavior.
