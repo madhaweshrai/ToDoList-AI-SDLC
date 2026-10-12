@@ -1,0 +1,14 @@
+node_modules
+dist
+data
+coverage
+tests
+scripts
+.git
+.github
+.idea
+.codemie
+*.db
+*.db-shm
+*.db-wal
+assets/demo*.png
