@@ -129,7 +129,9 @@ body {
   }
 
 form {
+    align-items: center;
     display: flex;
+    flex-direction: column;
     font-size: 1.7rem;
     justify-content: center;
     margin: 15px 0;
@@ -137,60 +139,147 @@ form {
     width: 100%;
 }
 
-form input {
+.form-main {
+    display: flex;
+    justify-content: center;
+    width: 100%;
+}
+
+input, select {
     padding: 10px;
     font-size: 17px;
     border: none;
     outline: none;
-    /* border-radius: 15; */
+    transition: background-color 200ms ease-in-out;
+}
+
+form .todo-input {
     border-top-left-radius: 17px;
     border-bottom-left-radius: 17px;
     max-width: 500px;
-    transition: background-color 200ms ease-in-out;
     width: 100%;
 }
 
 /* Input themes */
-form input.standard-input {
+.standard-input {
     background-color: #181a1a;
     color: rgb(247, 226, 223);
 }
 
-
-form input.light-input {
+.light-input {
     background-color: #AEB1B4;
     color: #1a150e;
 }
 
-form input.light-input::placeholder {
+.light-input::placeholder {
     color: #1a150e;
     opacity: 0.7;
 }
 
-form input.darker-input {
+.darker-input {
     background-color: #01394c;
     color: white;
 }
 
-form input.darker-input::placeholder {
+.darker-input::placeholder {
     color: white;
     opacity: 0.7;
 }
 
-form input:hover {
+input:hover {
     cursor: text;
 }
 
-form input.standard-input:hover {
+select:hover {
+    cursor: pointer;
+}
+
+.standard-input:hover {
     background-color: rgb(0, 0, 0);
 }
 
-form input.light-input:hover {
+.light-input:hover {
     background-color: #919699;
 }
 
-form input.darker-input:hover {
+.darker-input:hover {
     background-color: #013141;
+}
+
+.standard-input { color-scheme: dark; }
+.light-input { color-scheme: light; }
+.darker-input { color-scheme: dark; }
+
+/* Keyboard focus (outline is removed on controls above) */
+button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible {
+    outline: 3px solid #4da3ff;
+    outline-offset: 2px;
+}
+
+/* Messages */
+.form-message {
+    color: #ff8a80;
+    font-size: 1rem;
+    margin-top: 8px;
+    text-align: center;
+}
+
+.light .form-message {
+    color: #b00020;
+}
+
+.form-message[hidden] {
+    display: none;
+}
+
+/* Toolbar: filters, search, clear completed */
+#toolbar {
+    align-items: center;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+    margin: 10px 0;
+    padding: 0 1rem;
+    width: 100%;
+}
+
+.filters {
+    display: flex;
+}
+
+.filter-btn, .clear-btn {
+    font-size: 16px;
+    padding: 8px 16px;
+}
+
+.filter-btn {
+    border-radius: 0;
+}
+
+.filter-btn:first-child {
+    border-bottom-left-radius: 15px;
+    border-top-left-radius: 15px;
+}
+
+.filter-btn:last-child {
+    border-bottom-right-radius: 15px;
+    border-top-right-radius: 15px;
+}
+
+.filter-btn[aria-pressed="true"] {
+    font-weight: bold;
+    box-shadow: inset 0 -3px 0 #4da3ff;
+}
+
+.clear-btn {
+    border-radius: 15px;
+}
+
+#search-input {
+    border-radius: 15px;
+    max-width: 260px;
+    width: 100%;
 }
 
 button {
@@ -232,12 +321,16 @@ button.darker-button:hover {
     background-color: #001f29;
 }
 
-form button {
+form .todo-btn {
     padding: 10px;
     font-size: 17px;
     border-top-right-radius: 15px;
     border-bottom-right-radius: 15px;
     min-width: 100px;
+}
+
+#priority-input, #due-input {
+    flex-shrink: 0;
 }
 
 #myUnOrdList {
@@ -280,32 +373,87 @@ form button {
     background-color: #01394c;
 }
 
-.todo li{
-    padding: 7px;
-    /* word-wrap: break-word; */
-    /* flex-wrap: wrap; */
+.todo-body {
+    padding: 7px 0.5rem;
     font-size: 20px;
-    flex: 1; /* To push the trash and the check button to the right */
+    flex: 1; /* To push the action buttons to the right */
     border-radius: 30px;
 
     /* wraps the links */
     overflow-wrap: anywhere;
 }
 
-.check-btn, .delete-btn {
+.todo-meta {
+    display: flex;
+    flex-wrap: wrap;
+    font-size: 13px;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.priority-badge {
+    border-radius: 10px;
+    color: #111;
+    padding: 1px 8px;
+    text-transform: capitalize;
+}
+
+.priority-low { background-color: #9be3a3; }
+.priority-medium { background-color: #ffe08a; }
+.priority-high { background-color: #ff9d94; }
+
+.todo-due.overdue {
+    color: #ff8a80;
+    font-weight: bold;
+}
+
+.light .todo-due.overdue {
+    color: #b00020;
+}
+
+.todo-empty {
+    font-size: 18px;
+    list-style: none;
+    margin: 1rem;
+    opacity: 0.8;
+    text-align: center;
+}
+
+.todo-edit {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 4px 0.5rem;
+}
+
+.todo-edit .edit-title {
+    border-radius: 15px;
+    flex: 1 1 200px;
+    min-width: 0;
+}
+
+.todo-edit .edit-priority, .todo-edit .edit-due {
+    border-radius: 15px;
+}
+
+.todo-edit .edit-error {
+    flex-basis: 100%;
+    margin: 0;
+    text-align: left;
+}
+
+.check-btn, .delete-btn, .edit-btn, .save-btn, .cancel-btn {
     font-size: 19px;
     cursor: pointer;
+    flex-shrink: 0;
     width: 2em;
     height: 2em;
     border-radius: 80%;
     margin: 0 5px;
 }
 
-.todo-item {
-    padding: 0rem 0.5rem;
-}
-
-.fa-trash, .fa-check { 
+.fa-trash, .fa-check, .fa-edit, .fa-save, .fa-times {
     pointer-events: none;
 }
 
@@ -359,21 +507,22 @@ form button {
 }
 
 @media only screen and (max-width: 400px) {
-    form {
+    .form-main {
         align-items: center;
         flex-direction: column;
+        gap: 10px;
     }
 
-    form input {
+    form .todo-input, #priority-input, #due-input {
         border-radius: 17px;
     }
 
-    form button {
+    form .todo-btn {
         border-radius: 15px;
-        margin-top: 15px;
+        margin-top: 5px;
         width: 50%;
     }
-    form > button.light-button {
+    form button.light-button {
         box-shadow: 0 0 5px lightgray;
     }
 }
