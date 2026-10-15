@@ -375,13 +375,23 @@
     els.importNotice.hidden = true;
   }
 
+  /** Read-only peek used only to decide whether to show the waiting notice; the import re-reads inside the lock. */
+  function hasLegacyKey(storage) {
+    try {
+      return storage !== null && storage.getItem(LegacyImport.KEY) !== null;
+    } catch (error) {
+      return false;
+    }
+  }
+
   async function runLegacyImport() {
     try {
+      const storage = storageOrNull();
       const locks = locksOrNull();
-      // Another tab may hold the import lock; explain the wait before blocking on it (N-2).
-      if (locks) showImportNotice('Checking for tasks from the previous version…');
+      // Another tab may hold the import lock; explain the wait before blocking on it (N-2, R-1).
+      if (locks && hasLegacyKey(storage)) showImportNotice('Checking for tasks from the previous version…');
       const result = await LegacyImport.run({
-        storage: storageOrNull(),
+        storage,
         api: TodoApi,
         model: TodoModel,
         locks,
