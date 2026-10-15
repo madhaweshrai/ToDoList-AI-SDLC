@@ -72,6 +72,7 @@
         <button type="button" id="clear-completed" class="clear-btn" data-testid="clear-completed-btn">Clear completed</button>
     </div>
     <p id="app-message" class="form-message" data-testid="app-message" role="alert" hidden></p>
+    <div id="import-notice" class="import-notice" data-testid="import-notice" role="status" hidden><span class="import-notice-text" data-testid="import-notice-text"></span><button type="button" class="import-notice-dismiss" data-testid="import-notice-dismiss" aria-label="Dismiss notice">&times;</button></div>
 
     <div id="myUnOrdList">
         <ul class="todo-list" data-testid="todo-list"></ul>
@@ -79,6 +80,8 @@
 
     <script src="JS/api.js"></script>
     <script src="JS/time.js"></script>
+    <script src="JS/todo-model.js"></script>
+    <script src="JS/legacy-import.js"></script>
     <script src="JS/main.js"></script>
 </body>
 </html>

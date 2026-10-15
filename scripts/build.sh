@@ -12,8 +12,8 @@ STAGE="$DIST/$NAME"
 ARCHIVE="$DIST/$NAME.zip"
 
 if [ "${SKIP_TESTS:-0}" != "1" ]; then
-  echo "==> Running tests"
-  npm test
+  echo "==> Running tests (with the coverage gate)"
+  npm run test:coverage
 fi
 
 echo "==> Staging $NAME"

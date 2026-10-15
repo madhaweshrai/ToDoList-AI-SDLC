@@ -13,6 +13,7 @@
     "dev": "node --watch backend/server.js",
     "db:init": "node db/init.js",
     "test": "jest",
+    "test:coverage": "jest --coverage",
     "test:api": "jest tests/api",
     "test:unit": "jest tests/unit",
     "build": "bash scripts/build.sh",
@@ -31,6 +32,25 @@
     "testEnvironment": "node",
     "testMatch": [
       "<rootDir>/tests/**/*.test.js"
-    ]
+    ],
+    "collectCoverageFrom": [
+      "backend/src/**/*.js",
+      "JS/todo-model.js",
+      "JS/legacy-import.js"
+    ],
+    "coverageThreshold": {
+      "./JS/todo-model.js": {
+        "lines": 90
+      },
+      "./JS/legacy-import.js": {
+        "lines": 90
+      },
+      "./backend/src/dbMigrations.js": {
+        "lines": 90
+      },
+      "./backend/src/validation.js": {
+        "lines": 90
+      }
+    }
   }
 }

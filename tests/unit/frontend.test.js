@@ -7,7 +7,17 @@ const path = require('path');
 const root = path.join(__dirname, '..', '..');
 const read = (file) => fs.readFileSync(path.join(root, file), 'utf8');
 const indexHtml = read('index.html');
-const scripts = { api: read('JS/api.js'), time: read('JS/time.js'), main: read('JS/main.js') };
+const scripts = {
+  api: read('JS/api.js'),
+  time: read('JS/time.js'),
+  model: read('JS/todo-model.js'),
+  legacy: read('JS/legacy-import.js'),
+  main: read('JS/main.js'),
+};
+
+const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+const uid = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
+const ID_DETAIL = { field: 'id', message: 'must be a lowercase v4 UUID' };
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -16,15 +26,21 @@ const $$ = (selector) => Array.from(document.querySelectorAll(selector));
 const byTestId = (id, scope = document) => scope.querySelector(`[data-testid="${id}"]`);
 const allByTestId = (id, scope = document) => Array.from(scope.querySelectorAll(`[data-testid="${id}"]`));
 
-function createServer(initial = []) {
+/**
+ * In-memory fetch mock that behaves like the real API (D-8): UUID ids, real error shapes, id ignored on PUT.
+ * `failPost(body, postIndex)` may return 'network' (reject, nothing stored), 'lost' (store, then reject),
+ * a status number, or `{ status, details }`.
+ */
+function createServer(initial = [], { failPost } = {}) {
   const todos = initial.map((todo, index) => ({
-    id: index + 1,
+    id: uid(index + 1),
     title: todo.title,
     completed: Boolean(todo.completed),
     priority: todo.priority || 'medium',
     dueDate: todo.dueDate || null,
   }));
-  let nextId = todos.length + 1;
+  let nextSeq = todos.length + 1;
+  let postIndex = 0;
   const calls = [];
 
   const reply = (status, payload) => ({
@@ -41,7 +57,7 @@ function createServer(initial = []) {
     const body = options.body ? JSON.parse(options.body) : undefined;
     calls.push({ method, url, body });
     const parsed = new URL(url, 'http://localhost');
-    const idMatch = parsed.pathname.match(/^\/api\/todos\/(\d+)$/);
+    const idMatch = parsed.pathname.match(/^\/api\/todos\/([^/]+)$/);
 
     if (parsed.pathname === '/api/todos') {
       if (method === 'GET') {
@@ -56,8 +72,22 @@ function createServer(initial = []) {
         );
       }
       if (method === 'POST') {
-        const todo = { id: nextId++, completed: false, priority: 'medium', dueDate: null, ...body };
+        const failure = failPost ? failPost(body, postIndex) : null;
+        postIndex += 1;
+        if (failure === 'network') throw new TypeError('Failed to fetch');
+        if (typeof failure === 'number') return reply(failure, { error: { message: `Request failed (${failure})` } });
+        if (failure && typeof failure === 'object') {
+          return reply(failure.status, { error: { message: 'Validation failed', details: failure.details } });
+        }
+        if (body.id !== undefined && !V4.test(body.id)) {
+          return reply(400, { error: { message: 'Validation failed', details: [ID_DETAIL] } });
+        }
+        if (todos.some((t) => t.id === body.id)) {
+          return reply(409, { error: { message: `Todo ${body.id} already exists` } });
+        }
+        const todo = { completed: false, priority: 'medium', dueDate: null, ...body, id: body.id ?? uid(nextSeq++) };
         todos.push(todo);
+        if (failure === 'lost') throw new TypeError('Failed to fetch');
         return reply(201, { ...todo });
       }
       if (method === 'DELETE' && parsed.searchParams.get('completed') === 'true') {
@@ -67,10 +97,13 @@ function createServer(initial = []) {
       }
     }
     if (idMatch) {
-      const index = todos.findIndex((t) => t.id === Number(idMatch[1]));
-      if (index === -1) return reply(404, { error: { message: 'Todo not found' } });
+      const id = decodeURIComponent(idMatch[1]);
+      if (!V4.test(id)) return reply(400, { error: { message: 'Invalid todo id', details: [ID_DETAIL] } });
+      const index = todos.findIndex((t) => t.id === id);
+      if (index === -1) return reply(404, { error: { message: `Todo ${id} not found` } });
       if (method === 'PUT') {
-        Object.assign(todos[index], body);
+        const { id: ignoredId, ...changes } = body;
+        Object.assign(todos[index], changes);
         return reply(200, { ...todos[index] });
       }
       if (method === 'DELETE') {
@@ -90,9 +123,16 @@ async function boot(server) {
   global.fetch = server.fetchMock;
   (0, eval)(scripts.api);
   (0, eval)(scripts.time);
+  (0, eval)(scripts.model);
+  (0, eval)(scripts.legacy);
   (0, eval)(scripts.main);
   await settle();
 }
+
+const posts = (server) => server.calls.filter((call) => call.method === 'POST');
+const renderedIds = () => allByTestId('todo-item').map((li) => li.dataset.id);
+const notice = () => byTestId('import-notice');
+const noticeText = () => byTestId('import-notice-text').textContent;
 
 function type(input, value) {
   input.value = value;
@@ -202,7 +242,7 @@ describe('adding tasks', () => {
     await settle();
 
     const post = server.calls.find((call) => call.method === 'POST');
-    expect(post.body).toEqual({ title: 'Buy milk', priority: 'high', dueDate: '2031-04-05' });
+    expect(post.body).toEqual({ id: expect.stringMatching(V4), title: 'Buy milk', priority: 'high', dueDate: '2031-04-05' });
     expect(titles()).toEqual(['Buy milk']);
     expect(byTestId('todo-input').value).toBe('');
   });
@@ -259,7 +299,7 @@ describe('completing and persisting state', () => {
     byTestId('check-btn').click();
     await settle();
     const put = server.calls.find((call) => call.method === 'PUT');
-    expect(put.url).toBe('/api/todos/1');
+    expect(put.url).toBe(`/api/todos/${uid(1)}`);
     expect(put.body).toEqual({ completed: true });
     expect(byTestId('todo-item').classList.contains('completed')).toBe(true);
 
@@ -279,8 +319,8 @@ describe('completing and persisting state', () => {
 });
 
 describe('deleting', () => {
-  it('deletes by id, not by text, when titles are duplicated', async () => {
-    const server = createServer([{ title: 'Same' }, { title: 'Same' }]);
+  it('AC-2: deletes by id, not by text, when titles are duplicated', async () => {
+    const server = createServer([{ title: 'Call mom' }, { title: 'Call mom' }]);
     await boot(server);
 
     allByTestId('delete-btn')[1].click();
@@ -288,9 +328,21 @@ describe('deleting', () => {
     await wait(700);
 
     const del = server.calls.find((call) => call.method === 'DELETE');
-    expect(del.url).toBe('/api/todos/2');
-    expect(server.todos.map((t) => t.id)).toEqual([1]);
+    expect(del.url).toBe(`/api/todos/${uid(2)}`);
+    expect(server.todos.map((t) => t.id)).toEqual([uid(1)]);
     expect(allByTestId('todo-item')).toHaveLength(1);
+    expect(titles()).toEqual(['Call mom']);
+    expect(renderedIds()).toEqual([uid(1)]);
+  });
+
+  it('AC-2: toggles only the todo with the matching id', async () => {
+    const server = createServer([{ title: 'Call mom' }, { title: 'Call mom' }]);
+    await boot(server);
+
+    allByTestId('check-btn')[0].click();
+    await settle();
+
+    expect(server.todos.map((t) => t.completed)).toEqual([true, false]);
   });
 });
 
@@ -448,6 +500,315 @@ describe('themes', () => {
     byTestId('add-btn').click();
     await settle();
     expect(localStorage.getItem('todos')).toBeNull();
+  });
+});
+
+describe('fetch mock parity with the real API (D-8)', () => {
+  const call = async (server, url, method, body) => {
+    const res = await server.fetchMock(url, { method, body: body === undefined ? undefined : JSON.stringify(body) });
+    return { status: res.status, body: await res.json().catch(() => undefined) };
+  };
+
+  it('rejects a non-v4 id with field "id", answers 409 for a duplicate and ignores id on PUT', async () => {
+    const server = createServer([{ title: 'Keep id' }]);
+
+    const upper = await call(server, '/api/todos', 'POST', { id: 'ABCDEF00-0000-4000-8000-000000000001', title: 'x' });
+    expect(upper.status).toBe(400);
+    expect(upper.body.error.details[0].field).toBe('id');
+
+    const dup = await call(server, '/api/todos', 'POST', { id: uid(1), title: 'x' });
+    expect(dup).toEqual({ status: 409, body: { error: { message: `Todo ${uid(1)} already exists` } } });
+
+    const put = await call(server, `/api/todos/${uid(1)}`, 'PUT', { id: 'x', completed: true });
+    expect(put.status).toBe(200);
+    expect(put.body).toMatchObject({ id: uid(1), completed: true });
+
+    expect((await call(server, '/api/todos/1', 'DELETE')).status).toBe(400);
+    expect((await call(server, `/api/todos/${uid(99)}`, 'DELETE')).status).toBe(404);
+  });
+});
+
+describe('stable client ids (EPMCDMETST-68130)', () => {
+  it('AC-1: the POSTed id equals the stored id and the rendered data-id', async () => {
+    const server = createServer();
+    await boot(server);
+
+    type(byTestId('todo-input'), 'Buy milk');
+    byTestId('add-btn').click();
+    await settle();
+
+    const [post] = posts(server);
+    expect(post.body.id).toMatch(V4);
+    expect(post.body.title).toBe('Buy milk');
+    expect(server.todos.map((t) => t.id)).toEqual([post.body.id]);
+    expect(renderedIds()).toEqual([post.body.id]);
+  });
+
+  it('AC-1 / FR-9: adding the same title twice creates two todos with different ids', async () => {
+    const server = createServer();
+    await boot(server);
+
+    for (let i = 0; i < 2; i += 1) {
+      type(byTestId('todo-input'), 'Call mom');
+      byTestId('add-btn').click();
+      await settle();
+    }
+
+    const ids = posts(server).map((p) => p.body.id);
+    expect(new Set(ids).size).toBe(2);
+    expect(renderedIds()).toEqual(ids);
+  });
+
+  it('AC-4: posts a valid v4 id when crypto.randomUUID is unavailable', async () => {
+    const descriptor = Object.getOwnPropertyDescriptor(window.crypto, 'randomUUID');
+    Object.defineProperty(window.crypto, 'randomUUID', { value: undefined, configurable: true, writable: true });
+    const getRandomValues = jest.spyOn(window.crypto, 'getRandomValues');
+    try {
+      expect(window.crypto.randomUUID).toBeUndefined();
+      const server = createServer();
+      await boot(server);
+      for (const title of ['One', 'Two']) {
+        type(byTestId('todo-input'), title);
+        byTestId('add-btn').click();
+        await settle();
+      }
+      const ids = posts(server).map((p) => p.body.id);
+      ids.forEach((id) => expect(id).toMatch(V4));
+      expect(new Set(ids).size).toBe(2);
+      expect(renderedIds()).toEqual(ids);
+      expect(getRandomValues).toHaveBeenCalledTimes(2);
+    } finally {
+      getRandomValues.mockRestore();
+      delete window.crypto.randomUUID;
+      if (descriptor) Object.defineProperty(window.crypto, 'randomUUID', descriptor);
+    }
+  });
+
+  it('AC-10: after a lost response, Add resends the same id and the 409 counts as saved', async () => {
+    const server = createServer([], { failPost: (_body, i) => (i === 0 ? 'lost' : null) });
+    await boot(server);
+
+    type(byTestId('todo-input'), 'Pay rent');
+    byTestId('add-btn').click();
+    await settle();
+    expect(byTestId('form-message').hidden).toBe(false);
+    expect(byTestId('form-message').textContent).toMatch(/could not reach the server/i);
+    expect(byTestId('todo-input').value).toBe('Pay rent');
+
+    byTestId('add-btn').click();
+    await settle();
+
+    const [first, second] = posts(server);
+    expect(second.body.id).toBe(first.body.id);
+    expect(byTestId('form-message').hidden).toBe(true);
+    expect(byTestId('todo-input').value).toBe('');
+    expect(server.todos).toHaveLength(1);
+    expect(titles()).toEqual(['Pay rent']);
+    expect(renderedIds()).toEqual([first.body.id]);
+  });
+
+  it('AC-10: a changed input after a failure sends a new id', async () => {
+    const server = createServer([], { failPost: (_body, i) => (i === 0 ? 'network' : null) });
+    await boot(server);
+
+    type(byTestId('todo-input'), 'Pay rent');
+    byTestId('add-btn').click();
+    await settle();
+    type(byTestId('todo-input'), 'Pay rent today');
+    byTestId('add-btn').click();
+    await settle();
+
+    const [first, second] = posts(server);
+    expect(second.body.id).not.toBe(first.body.id);
+    expect(server.todos.map((t) => t.title)).toEqual(['Pay rent today']);
+  });
+
+  it('AC-10: changing only the priority after a failure also sends a new id', async () => {
+    const server = createServer([], { failPost: (_body, i) => (i === 0 ? 'network' : null) });
+    await boot(server);
+
+    type(byTestId('todo-input'), 'Pay rent');
+    byTestId('add-btn').click();
+    await settle();
+    $('#priority-input').value = 'high';
+    byTestId('add-btn').click();
+    await settle();
+
+    const [first, second] = posts(server);
+    expect(second.body.id).not.toBe(first.body.id);
+  });
+
+  it('FR-13: a non-409 server error keeps the draft id for the retry', async () => {
+    const server = createServer([], { failPost: (_body, i) => (i === 0 ? 500 : null) });
+    await boot(server);
+
+    type(byTestId('todo-input'), 'Retry me');
+    byTestId('add-btn').click();
+    await settle();
+    expect(byTestId('form-message').textContent).toBe('Request failed (500)');
+
+    byTestId('add-btn').click();
+    await settle();
+
+    const [first, second] = posts(server);
+    expect(second.body.id).toBe(first.body.id);
+    expect(titles()).toEqual(['Retry me']);
+  });
+});
+
+describe('legacy localStorage import (FR-10)', () => {
+  it('AC-3: imports ["A","B"] with ids before the first list, removes the key and keeps savedTheme', async () => {
+    localStorage.setItem('todos', JSON.stringify(['A', 'B']));
+    localStorage.setItem('savedTheme', 'darker');
+    const server = createServer();
+    const original = server.fetchMock.getMockImplementation();
+    const noticeDuringPost = [];
+    server.fetchMock.mockImplementation(async (url, options) => {
+      if (options && options.method === 'POST') noticeDuringPost.push(noticeText());
+      return original(url, options);
+    });
+
+    await boot(server);
+
+    const bodies = posts(server).map((p) => p.body);
+    expect(bodies.map((b) => b.title)).toEqual(['A', 'B']);
+    bodies.forEach((b) => {
+      expect(b.id).toMatch(V4);
+      expect(b.completed).toBe(false);
+    });
+    expect(server.calls[0].method).toBe('POST');
+    expect(noticeDuringPost[0]).toBe('Importing 2 task(s) from the previous version…');
+    expect(localStorage.getItem('todos')).toBeNull();
+    expect(titles()).toEqual(['A', 'B']);
+    expect(renderedIds()).toEqual(bodies.map((b) => b.id));
+
+    expect(notice().hidden).toBe(false);
+    expect(noticeText()).toBe('Imported 2 task(s) from the previous version');
+    byTestId('import-notice-dismiss').click();
+    expect(notice().hidden).toBe(true);
+
+    expect(localStorage.getItem('savedTheme')).toBe('darker');
+    expect(document.body.className).toBe('darker');
+  });
+
+  it('NFR-1: renders a legacy title containing HTML as text', async () => {
+    const payload = '<img src=x onerror="window.pwnedLegacy=1">';
+    localStorage.setItem('todos', JSON.stringify([payload]));
+    await boot(createServer());
+
+    expect(titles()).toEqual([payload]);
+    expect($('.todo-list img')).toBeNull();
+    expect(window.pwnedLegacy).toBeUndefined();
+  });
+
+  it.each(['network', 'lost'])(
+    'AC-7: a failed 2nd of 3 imports (%s) keeps items 2-3; the next load completes with no duplicates',
+    async (mode) => {
+      localStorage.setItem('todos', JSON.stringify(['A', 'B', 'C']));
+      const server = createServer([], { failPost: (_body, i) => (i === 1 ? mode : null) });
+
+      await boot(server);
+
+      const kept = JSON.parse(localStorage.getItem('todos'));
+      expect(kept.map((t) => t.title)).toEqual(['B', 'C']);
+      expect(notice().hidden).toBe(false);
+      expect(noticeText()).toBe('Could not import 2 task(s) from the previous version; will retry next time.');
+      expect(titles()).toEqual(mode === 'lost' ? ['A', 'B'] : ['A']);
+
+      await boot(server);
+
+      expect(localStorage.getItem('todos')).toBeNull();
+      expect(server.todos.map((t) => t.title)).toEqual(['A', 'B', 'C']);
+      expect(server.todos.slice(1).map((t) => t.id)).toEqual(kept.map((t) => t.id));
+      expect(titles()).toEqual(['A', 'B', 'C']);
+      expect(noticeText()).toBe('Imported 2 task(s) from the previous version');
+    },
+  );
+
+  it.each(['{oops', '{}'])('AC-8: leaves the corrupt legacy value %p untouched and still loads', async (raw) => {
+    localStorage.setItem('todos', raw);
+    const server = createServer([{ title: 'Server task' }]);
+
+    await boot(server);
+
+    expect(localStorage.getItem('todos')).toBe(raw);
+    expect(posts(server)).toHaveLength(0);
+    expect(titles()).toEqual(['Server task']);
+    expect(notice().hidden).toBe(true);
+  });
+
+  it('AC-8: imports the valid entries of [1, null, "", "ok"] and reports the skipped ones', async () => {
+    localStorage.setItem('todos', JSON.stringify([1, null, '', 'ok']));
+    const server = createServer();
+
+    await boot(server);
+
+    expect(posts(server).map((p) => p.body.title)).toEqual(['ok']);
+    expect(titles()).toEqual(['ok']);
+    expect(localStorage.getItem('todos')).toBeNull();
+    expect(noticeText()).toBe('Imported 1 task(s) from the previous version; skipped 3 invalid entr(ies)');
+  });
+
+  it('EH-6: the app still loads when localStorage access throws', async () => {
+    const spy = jest.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+      throw new Error('SecurityError');
+    });
+    try {
+      const server = createServer([{ title: 'Still here' }]);
+      await boot(server);
+      expect(titles()).toEqual(['Still here']);
+      expect(posts(server)).toHaveLength(0);
+      expect(notice().hidden).toBe(true);
+      expect(document.body.className).toBe('standard');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  describe('with navigator.locks (FR-14)', () => {
+    afterEach(() => {
+      delete navigator.locks;
+    });
+
+    it('N-2 / AC-12: shows a checking notice while waiting for the lock, then imports inside it', async () => {
+      localStorage.setItem('todos', JSON.stringify(['A']));
+      let release;
+      const gate = new Promise((resolve) => {
+        release = resolve;
+      });
+      const locks = {
+        request: jest.fn(async (name, callback) => {
+          await gate;
+          return callback({ name });
+        }),
+      };
+      Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
+      const server = createServer();
+
+      await boot(server);
+      expect(notice().hidden).toBe(false);
+      expect(noticeText()).toBe('Checking for tasks from the previous version…');
+      expect(server.calls).toHaveLength(0);
+
+      release();
+      await settle();
+
+      expect(locks.request).toHaveBeenCalledWith('todos-legacy-import', expect.any(Function));
+      expect(noticeText()).toBe('Imported 1 task(s) from the previous version');
+      expect(titles()).toEqual(['A']);
+    });
+
+    it('N-2: hides the checking notice when there is nothing to import', async () => {
+      const locks = { request: jest.fn(async (name, callback) => callback({ name })) };
+      Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
+      const server = createServer([{ title: 'Only server' }]);
+
+      await boot(server);
+
+      expect(locks.request).toHaveBeenCalledTimes(1);
+      expect(notice().hidden).toBe(true);
+      expect(titles()).toEqual(['Only server']);
+    });
   });
 });
 

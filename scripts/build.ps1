@@ -13,8 +13,8 @@ $stage = Join-Path $dist $name
 $archive = Join-Path $dist "$name.zip"
 
 if (-not $SkipTests) {
-    Write-Host '==> Running tests'
-    npm test
+    Write-Host '==> Running tests (with the coverage gate)'
+    npm run test:coverage
     if ($LASTEXITCODE -ne 0) { throw "Tests failed (exit code $LASTEXITCODE)" }
 }
 

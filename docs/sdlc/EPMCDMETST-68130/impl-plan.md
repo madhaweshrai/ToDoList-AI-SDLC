@@ -165,7 +165,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npx jest tests/unit/db-migration.test.js`
   - **Done when:** AC-6 and AC-11 integration cases pass against the real `db/schema.sql`; `npm test` is green.
 
-- [ ] **T6 — `JS/todo-model.js` (new)**  · P0 · Depends on: T1 · Covers: FR-1, FR-2, FR-10a, EH-7, EH-9, NFR-2, NFR-1 (textContent note), AC-4, AC-8 (model), D-10a, D-10b
+- [x] **T6 — `JS/todo-model.js` (new)**  · P0 · Depends on: T1 · Covers: FR-1, FR-2, FR-10a, EH-7, EH-9, NFR-2, NFR-1 (textContent note), AC-4, AC-8 (model), D-10a, D-10b
   - **Files:** `JS/todo-model.js`, `tests/unit/todo-model.test.js`
   - **Skill:** dto-generator (Todo DTO shape, `fromLegacy`/`convertLegacy` conversion)
   - **Steps:**
@@ -186,7 +186,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npx jest tests/unit/todo-model.test.js`
   - **Done when:** every case above passes and the parity test fails on any future drift between the two regexes.
 
-- [ ] **T7 — `JS/api.js`: attach `status` and `details` to thrown errors**  · P0 · Depends on: — · Covers: EH-4 (groundwork, AD-5), FR-13 (groundwork)
+- [x] **T7 — `JS/api.js`: attach `status` and `details` to thrown errors**  · P0 · Depends on: — · Covers: EH-4 (groundwork, AD-5), FR-13 (groundwork)
   - **Files:** `JS/api.js`
   - **Skill:** —
   - **Steps:**
@@ -198,7 +198,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Done when:** every existing `frontend.test.js` assertion that reads `error.message` still passes unchanged
     (no behavioural regression); `status`/`details` are available for T8 and T10 to consume.
 
-- [ ] **T8 — `JS/legacy-import.js` (new)**  · P0 · Depends on: T6 · Covers: FR-10, FR-11, FR-14, EH-4, EH-5, EH-6, NFR-6, AC-3 (module), AC-7, AC-8 (module), AC-12
+- [x] **T8 — `JS/legacy-import.js` (new)**  · P0 · Depends on: T6 · Covers: FR-10, FR-11, FR-14, EH-4, EH-5, EH-6, NFR-6, AC-3 (module), AC-7, AC-8 (module), AC-12
   - **Files:** `JS/legacy-import.js`, `tests/unit/legacy-import.test.js`
   - **Skill:** dto-generator (`LegacyImportResult` shape)
   - **Steps:**
@@ -225,7 +225,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npx jest tests/unit/legacy-import.test.js`
   - **Done when:** every case above passes.
 
-- [ ] **T9 — `index.html`: import-notice markup + script load order**  · P0 · Depends on: T6, T8 · Covers: FR-10e (markup), C5
+- [x] **T9 — `index.html`: import-notice markup + script load order**  · P0 · Depends on: T6, T8 · Covers: FR-10e (markup), C5
   - **Files:** `index.html`
   - **Skill:** —
   - **Steps:**
@@ -239,7 +239,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Done when:** `frontend.test.js`'s "closes div.version ... div balance" markup test still passes (equal
     `<div>`/`</div>` counts); the new elements exist with the exact `data-testid`s above.
 
-- [ ] **T10 — `JS/main.js` wiring: draft id, string ids, legacy import, notice**  · P0 · Depends on: T4, T6, T7, T8, T9 · Covers: FR-8, FR-9, FR-10 (wiring), FR-12, FR-13, AC-1, AC-2, AC-3, AC-4, AC-7, AC-8, AC-9, AC-10, EH-6
+- [x] **T10 — `JS/main.js` wiring: draft id, string ids, legacy import, notice**  · P0 · Depends on: T4, T6, T7, T8, T9 · Covers: FR-8, FR-9, FR-10 (wiring), FR-12, FR-13, AC-1, AC-2, AC-3, AC-4, AC-7, AC-8, AC-9, AC-10, EH-6
   - **Files:** `JS/main.js`, `tests/unit/frontend.test.js`
   - **Skill:** —
   - **Steps:**
@@ -279,7 +279,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npx jest tests/unit/frontend.test.js`
   - **Done when:** every case above passes and `npm test` is fully green (confirms AC-9 full regression).
 
-- [ ] **T11 — `CSS/main.css`: import-notice styles**  · P2 · Depends on: T9 · Covers: FR-10e (presentation)
+- [x] **T11 — `CSS/main.css`: import-notice styles**  · P2 · Depends on: T9 · Covers: FR-10e (presentation)
   - **Files:** `CSS/main.css`
   - **Skill:** —
   - **Steps:**
@@ -289,7 +289,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Done when:** the new classes exist and are visually consistent with the three themes; no test regression
     (there is no visual test — this is confirmed purely by the full suite staying green).
 
-- [ ] **T12 — Coverage gate: `package.json` `jest` config**  · P1 · Depends on: T2, T4, T6, T8 · Covers: NFR-5, D-5/AD-2, N-3
+- [x] **T12 — Coverage gate: `package.json` `jest` config**  · P1 · Depends on: T2, T4, T6, T8 · Covers: NFR-5, D-5/AD-2, N-3
   - **Files:** `package.json`
   - **Skill:** —
   - **Steps:**
@@ -303,7 +303,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Done when:** the coverage run passes with all four target files at or above 90 % lines; `npm test` (no
     coverage) behaves exactly as before.
 
-- [ ] **T13 — Build scripts enforce the coverage gate**  · P1 · Depends on: T12 · Covers: NFR-5 (build-time enforcement)
+- [x] **T13 — Build scripts enforce the coverage gate**  · P1 · Depends on: T12 · Covers: NFR-5 (build-time enforcement)
   - **Files:** `scripts/build.sh`, `scripts/build.ps1`
   - **Skill:** —
   - **Steps:**
@@ -314,7 +314,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Done when:** both build scripts run `npm run test:coverage` and fail the build on a coverage-threshold miss,
     exactly like a direct `npm run test:coverage` invocation would.
 
-- [ ] **T14 — `README.md`: API, upgrade and testing-gate docs**  · P1 · Depends on: T4, T5, T12 · Covers: documents FR-3, FR-5, EH-10, NFR-5
+- [x] **T14 — `README.md`: API, upgrade and testing-gate docs**  · P1 · Depends on: T4, T5, T12 · Covers: documents FR-3, FR-5, EH-10, NFR-5
   - **Files:** `README.md`
   - **Skill:** doc-quality-check
   - **Steps:**
