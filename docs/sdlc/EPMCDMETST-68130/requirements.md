@@ -1,7 +1,7 @@
 # Requirements — EPMCDMETST-68130: Structured todos with stable IDs
 
 **Story:** As a user, I want todos stored as structured objects with stable IDs so that duplicate tasks and future metadata are handled reliably.
-**Type:** Story · **Priority:** Average · **Labels:** ai-sdlc, frontend · **Scope ref:** G01
+**Type:** Story · **Revision:** 2 (design-gate decisions AD-1…AD-4) · **Priority:** Average · **Labels:** ai-sdlc, frontend · **Scope ref:** G01
 **Source:** [Jira EPMCDMETST-68130](https://jiraeu.epam.com/browse/EPMCDMETST-68130) · verbatim copy: [`user-story.md`](user-story.md)
 **Repository:** `madhaweshrai/ToDoList-AI-SDLC` · **Branch:** `feature/EPMCDMETST-68130-structured-todos` (from `origin/master` @ 3a07a9d)
 
@@ -50,6 +50,8 @@ Since the story was written, EPMCDMETST-68567 (PR #2) moved todo persistence to 
 | FR-9 | **Duplicate texts.** Two todos with the same title are independent. Deleting or updating one affects only the todo with the matching id. |
 | FR-10 | **Legacy migration (frontend, once per load before the first list).** If `localStorage["todos"]` exists: <br>(a) Parse it. If it is an array, convert each entry to a Todo object: a **string** becomes `{ id: newId(), title: trimmed text, completed: false, createdAt: now }`. An **object** with `text` or `title` keeps a valid `id` if present (otherwise it gets a new one) and keeps a boolean `completed`. <br>(b) **Write the converted object array back** to `localStorage["todos"]` before importing, so the generated ids are stable across retries. <br>(c) POST each item in the original order, with its `id`, `title` and `completed`. <br>(d) After all items succeed, remove `localStorage["todos"]`. <br>(e) Show a dismissible notice: "Imported N task(s) from the previous version" (plus "; skipped M invalid entr(ies)" when M > 0). |
 | FR-11 | **Migration retry is idempotent.** A `409 Conflict` for an id that already exists counts as "already imported". A retry after a partial failure therefore never creates duplicates. |
+| FR-13 | **Idempotent add (AD-1).** The add form reuses its generated id while the title, priority and due date are unchanged. A `409` on create counts as already saved. A new id is generated after a successful add or an input change. |
+| FR-14 | **Single importer across tabs (AD-4).** When `navigator.locks` exists, the legacy import runs inside the lock `todos-legacy-import` and re-reads storage inside it. |
 | FR-12 | **Existing behaviour is preserved:** add, empty-input message, edit, toggle, delete animation, filters, search, clear completed, themes, the clock, and HTML-safe rendering. The theme key `savedTheme` is untouched by the migration. |
 
 ## 5. Error handling requirements
@@ -65,6 +67,7 @@ Since the story was written, EPMCDMETST-68567 (PR #2) moved todo persistence to 
 | EH-7 | `crypto.randomUUID` is unavailable (non-secure context, older browser) | The fallback generator is used (FR-2). |
 | EH-8 | The startup DB conversion fails | The transaction is rolled back, the server exits with a clear error, and the database is unchanged. |
 | EH-9 | The legacy entry's title is longer than 200 characters after trimming | Skipped and counted as invalid (the API would reject it). |
+| EH-10 | The pre-migration backup (`VACUUM INTO <db>.pre-68130.bak`) fails (AD-3) | Nothing is migrated. The server exits 1 with a message naming the backup path. |
 
 ## 6. Non-functional requirements
 
@@ -74,7 +77,7 @@ Since the story was written, EPMCDMETST-68567 (PR #2) moved todo persistence to 
 | NFR-2 | **Uniqueness.** The ids generated in tests (including 10 000 fallback ids) contain no duplicates, and all match the v4 regex. |
 | NFR-3 | **Compatibility.** Works without `crypto.randomUUID` and without `localStorage`. There is no change to the public API apart from the id type and the optional `id` on create. |
 | NFR-4 | **Dependencies.** No new runtime or dev dependencies. `npm audit` must report no high or critical vulnerabilities in the existing dependencies, or any that it reports are listed under Known Limitations. |
-| NFR-5 | **Testability.** All existing tests pass (updated only where they asserted integer ids). The new and changed code (`JS/todo-model.js`, the migration in `JS/main.js`, the id validation, the schema migration) has ≥ 90 % line coverage in `jest --coverage`. |
+| NFR-5 | **Testability.** All existing tests pass (updated only where they asserted integer ids). The new logic modules (`JS/todo-model.js`, `JS/legacy-import.js`, `backend/src/dbMigrations.js`, `backend/src/validation.js`) have ≥ 90 % line coverage, **enforced** through Jest `coverageThreshold` (AD-2). The `main.js` wiring is covered by the jsdom AC tests. |
 | NFR-6 | **Performance.** A migration of 200 legacy items completes without blocking the UI. Requests are sequential, because order must be preserved. |
 
 ## 7. Acceptance criteria
@@ -92,6 +95,9 @@ The Gherkin scenarios from the story are adapted to the agreed architecture (Q1)
 | AC-7 | Given the 2nd of 3 legacy imports fails, then items 2–3 remain in `localStorage` and a retry notice is shown. On the next load the import completes with no duplicates (the 409 is treated as already imported). | FR-11, EH-4 |
 | AC-8 | Given corrupt legacy data (`"{oops"`, `{}`, `[1, null, "", "ok"]`), the app loads without throwing. Valid entries are imported, invalid ones are counted, and corrupt non-arrays are left untouched. | EH-5, EH-9 |
 | AC-9 | All pre-existing behaviours (FR-12) still pass in the regression suite. | FR-12 |
+| AC-10 | Given an add whose response was lost, when the user clicks Add again with the same input, then the same id is resent, the `409` counts as saved, and only one todo exists. | FR-13 |
+| AC-11 | Given an integer-id database whose backup cannot be written, when the server starts, then it exits 1, names the backup path, and the database is unchanged. When the backup succeeds, the `.bak` file is a readable copy of the old database. | EH-10, FR-5 |
+| AC-12 | Given `navigator.locks` exists, when two imports run at the same time, then they run one after the other and the second finds no legacy key (no duplicates). | FR-14 |
 
 ## 8. Out of scope
 
