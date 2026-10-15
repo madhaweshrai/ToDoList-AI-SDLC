@@ -11,6 +11,9 @@
     due: document.getElementById('due-input'),
     formMessage: document.getElementById('form-message'),
     appMessage: document.getElementById('app-message'),
+    importNotice: document.getElementById('import-notice'),
+    importNoticeText: document.querySelector('#import-notice .import-notice-text'),
+    importNoticeDismiss: document.querySelector('#import-notice .import-notice-dismiss'),
     list: document.querySelector('.todo-list'),
     search: document.getElementById('search-input'),
     clearCompleted: document.getElementById('clear-completed'),
@@ -27,6 +30,8 @@
     theme: 'standard',
     loadSeq: 0,
     loaded: false,
+    // The add form's pending id, reused while the input is unchanged so a retry cannot duplicate (AD-1).
+    draft: { id: null, key: null },
   };
 
   // ---------- helpers ----------
@@ -201,7 +206,7 @@
       className: `todo ${state.theme}-todo${todo.completed ? ' completed' : ''}`,
       testid: 'todo-item',
     });
-    li.dataset.id = String(todo.id);
+    li.dataset.id = todo.id;
     if (editing) {
       li.classList.add('editing');
       renderEditRow(li, todo);
@@ -260,6 +265,14 @@
     }
   }
 
+  /** Same input as the last unsaved attempt -> same id; changed input -> fresh id. */
+  function draftIdFor(key) {
+    if (state.draft.id === null || state.draft.key !== key) {
+      state.draft = { id: TodoModel.newId(), key };
+    }
+    return state.draft.id;
+  }
+
   async function addTodo(event) {
     event.preventDefault();
     const title = els.input.value.trim();
@@ -269,16 +282,19 @@
       els.input.focus();
       return;
     }
+    const priority = els.priority.value;
+    const dueDate = els.due.value || null;
+    const id = draftIdFor(JSON.stringify([title, priority, dueDate]));
     try {
-      await TodoApi.create({
-        title,
-        priority: els.priority.value,
-        dueDate: els.due.value || null,
-      });
+      await TodoApi.create({ id, title, priority, dueDate });
     } catch (error) {
-      showMessage(els.formMessage, error.message);
-      return;
+      // 409: an earlier attempt with this draft id was saved but its response was lost (FR-13).
+      if (error.status !== 409) {
+        showMessage(els.formMessage, error.message);
+        return;
+      }
     }
+    state.draft = { id: null, key: null };
     clearMessage(els.formMessage);
     els.input.value = '';
     els.due.value = '';
@@ -287,7 +303,7 @@
   }
 
   function findTodo(li) {
-    const id = Number(li.dataset.id);
+    const id = li.dataset.id;
     return state.todos.find((todo) => todo.id === id);
   }
 
@@ -332,9 +348,68 @@
     await loadTodos();
   }
 
+  // ---------- legacy import (EPMCDMETST-68130) ----------
+
+  function storageOrNull() {
+    try {
+      return window.localStorage;
+    } catch (error) {
+      return null; // some browsers throw on the getter itself (EH-6)
+    }
+  }
+
+  function locksOrNull() {
+    try {
+      return navigator.locks && typeof navigator.locks.request === 'function' ? navigator.locks : null;
+    } catch (error) {
+      return null;
+    }
+  }
+
+  function showImportNotice(text) {
+    els.importNoticeText.textContent = text;
+    els.importNotice.hidden = false;
+  }
+
+  function hideImportNotice() {
+    els.importNotice.hidden = true;
+  }
+
+  /** Read-only peek used only to decide whether to show the waiting notice; the import re-reads inside the lock. */
+  function hasLegacyKey(storage) {
+    try {
+      return storage !== null && storage.getItem(LegacyImport.KEY) !== null;
+    } catch (error) {
+      return false;
+    }
+  }
+
+  async function runLegacyImport() {
+    try {
+      const storage = storageOrNull();
+      const locks = locksOrNull();
+      // Another tab may hold the import lock; explain the wait before blocking on it (N-2, R-1).
+      if (locks && hasLegacyKey(storage)) showImportNotice('Checking for tasks from the previous version…');
+      const result = await LegacyImport.run({
+        storage,
+        api: TodoApi,
+        model: TodoModel,
+        locks,
+        onStart: (count) => showImportNotice(LegacyImport.progressMessage(count)),
+      });
+      const text = LegacyImport.message(result);
+      if (text) showImportNotice(text);
+      else hideImportNotice();
+    } catch (error) {
+      hideImportNotice();
+    }
+  }
+
   // ---------- events ----------
 
   els.form.addEventListener('submit', addTodo);
+
+  els.importNoticeDismiss.addEventListener('click', hideImportNotice);
 
   els.list.addEventListener('click', (event) => {
     const button = event.target.closest('button');
@@ -405,5 +480,9 @@
   // ---------- init ----------
 
   setTheme(readStoredTheme());
-  loadTodos();
+  // Import before the first list so imported items are in the first render (AC-3).
+  (async () => {
+    await runLegacyImport();
+    await loadTodos();
+  })();
 })();

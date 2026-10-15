@@ -26,7 +26,12 @@
 
     if (!response.ok) {
       const message = payload && payload.error && payload.error.message;
-      throw new Error(message || `Request failed (${response.status})`);
+      const error = new Error(message || `Request failed (${response.status})`);
+      // Callers classify failures by HTTP status and validation fields (409 = already saved, AD-5).
+      error.status = response.status;
+      const details = payload && payload.error && payload.error.details;
+      if (Array.isArray(details)) error.details = details;
+      throw error;
     }
     return payload;
   }

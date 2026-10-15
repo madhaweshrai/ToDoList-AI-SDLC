@@ -1,3 +1,4 @@
+const { randomUUID } = require('node:crypto');
 const { NotFoundError, ValidationError } = require('../errors');
 const {
   parseId,
@@ -6,7 +7,7 @@ const {
   parseListQuery,
 } = require('../validation');
 
-function createTodoService({ repository, now = () => new Date().toISOString() }) {
+function createTodoService({ repository, now = () => new Date().toISOString(), newId = randomUUID }) {
   function requireTodo(id) {
     const todo = repository.findById(id);
     if (!todo) throw new NotFoundError(`Todo ${id} not found`);
@@ -26,6 +27,7 @@ function createTodoService({ repository, now = () => new Date().toISOString() })
       const input = parseCreateBody(body);
       return repository.create(
         {
+          id: input.id ?? newId(),
           title: input.title,
           completed: input.completed ?? false,
           priority: input.priority ?? 'medium',

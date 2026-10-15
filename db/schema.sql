@@ -1,5 +1,6 @@
 CREATE TABLE IF NOT EXISTS todos (
-    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    id         TEXT    PRIMARY KEY NOT NULL
+               CHECK (length(id) = 36 AND id = lower(id)),
     title      TEXT    NOT NULL
                CHECK (length(title) BETWEEN 1 AND 200 AND title = trim(title)),
     completed  INTEGER NOT NULL DEFAULT 0
@@ -13,5 +14,6 @@ CREATE TABLE IF NOT EXISTS todos (
     updated_at TEXT    NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
 );
 
-CREATE INDEX IF NOT EXISTS idx_todos_completed ON todos (completed);
-CREATE INDEX IF NOT EXISTS idx_todos_priority ON todos (priority);
+CREATE INDEX IF NOT EXISTS idx_todos_completed  ON todos (completed);
+CREATE INDEX IF NOT EXISTS idx_todos_priority   ON todos (priority);
+CREATE INDEX IF NOT EXISTS idx_todos_created_at ON todos (created_at);

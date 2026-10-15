@@ -232,6 +232,39 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
     display: none;
 }
 
+/* Legacy-import notice (EPMCDMETST-68130): informational, so it inherits the theme text colour, not the error red */
+.import-notice {
+    align-items: center;
+    border: 1px solid currentColor;
+    border-radius: 6px;
+    display: flex;
+    font-size: 1rem;
+    gap: 12px;
+    justify-content: space-between;
+    margin: 8px auto;
+    max-width: 640px;
+    padding: 8px 12px;
+    text-align: center;
+}
+
+.import-notice[hidden] {
+    display: none;
+}
+
+.import-notice-text {
+    flex: 1;
+}
+
+.import-notice-dismiss {
+    background: transparent;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    padding: 0 4px;
+}
+
 /* Toolbar: filters, search, clear completed */
 #toolbar {
     align-items: center;
