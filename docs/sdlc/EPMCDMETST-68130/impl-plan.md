@@ -60,7 +60,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
 
 ## Task list
 
-- [ ] **T1 — Shared UUID validation primitives (additive)**  · P0 · Depends on: — · Covers: FR-2, FR-3, FR-7, NFR-1, D-10a (groundwork)
+- [x] **T1 — Shared UUID validation primitives (additive)**  · P0 · Depends on: — · Covers: FR-2, FR-3, FR-7, NFR-1, D-10a (groundwork)
   - **Files:** `backend/src/validation.js`, `tests/unit/validation.test.js`
   - **Skill:** —
   - **Steps:**
@@ -75,7 +75,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Done when:** the new `isUuidV4`/`UUID_V4_RE` tests pass and every existing `validation.test.js` case (still
     exercising the unchanged integer `parseId`) is untouched and green.
 
-- [ ] **T2 — `backend/src/dbMigrations.js` (new, isolated)**  · P0 · Depends on: — · Covers: FR-4 (re-check), FR-5, EH-8, EH-10, AC-6 (module), AC-11 (module), N-1
+- [x] **T2 — `backend/src/dbMigrations.js` (new, isolated)**  · P0 · Depends on: — · Covers: FR-4 (re-check), FR-5, EH-8, EH-10, AC-6 (module), AC-11 (module), N-1
   - **Files:** `backend/src/dbMigrations.js`, `tests/fixtures/schema-integer-ids.sql`, `tests/unit/db-migration.test.js`
   - **Skill:** —
   - **Steps:**
@@ -102,7 +102,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npx jest tests/unit/db-migration.test.js`
   - **Done when:** all cases above pass; `npm test` is unaffected (no other file is touched).
 
-- [ ] **T3 — `backend/src/errors.js`: add `ConflictError`**  · P0 · Depends on: — · Covers: EH-2 (groundwork)
+- [x] **T3 — `backend/src/errors.js`: add `ConflictError`**  · P0 · Depends on: — · Covers: EH-2 (groundwork)
   - **Files:** `backend/src/errors.js`
   - **Skill:** —
   - **Steps:**
@@ -111,7 +111,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npm test`
   - **Done when:** `ConflictError` is exported and instantiable with `status === 409`; full suite still green (128 tests).
 
-- [ ] **T4 — Backend id-type cutover: schema, repository, service, validation finalize**  · P0 · Depends on: T1, T3 · Covers: FR-3, FR-4, FR-6, FR-7, FR-9, EH-1, EH-2, EH-3, NFR-1, NFR-2, NFR-3 (optional id), AC-1 (backend half), AC-2, AC-5
+- [x] **T4 — Backend id-type cutover: schema, repository, service, validation finalize**  · P0 · Depends on: T1, T3 · Covers: FR-3, FR-4, FR-6, FR-7, FR-9, EH-1, EH-2, EH-3, NFR-1, NFR-2, NFR-3 (optional id), AC-1 (backend half), AC-2, AC-5
   - **Files:** `db/schema.sql`, `db/seed.sql`, `backend/src/validation.js`, `backend/src/repositories/todoRepository.js`,
     `backend/src/services/todoService.js`, `tests/unit/repository.test.js`, `tests/unit/service.test.js`,
     `tests/unit/validation.test.js`, `tests/api/todos.test.js`
@@ -143,7 +143,7 @@ branch T1 → T6 → T8 → T12 → T13 ties at the same depth and can run in pa
   - **Verify:** `npx jest tests/unit/repository.test.js tests/unit/service.test.js tests/unit/validation.test.js tests/api/todos.test.js`
   - **Done when:** all four suites pass with string UUID ids end to end and `npm test` is fully green.
 
-- [ ] **T5 — Wire the DB migration into startup (`db.js`, `server.js`, `init.js`)**  · P0 · Depends on: T2, T4 · Covers: FR-4, FR-5, EH-8, EH-10, AC-6, AC-11
+- [x] **T5 — Wire the DB migration into startup (`db.js`, `server.js`, `init.js`)**  · P0 · Depends on: T2, T4 · Covers: FR-4, FR-5, EH-8, EH-10, AC-6, AC-11
   - **Files:** `backend/src/db.js`, `backend/server.js`, `db/init.js`, `tests/unit/db-migration.test.js`
   - **Skill:** —
   - **Steps:**

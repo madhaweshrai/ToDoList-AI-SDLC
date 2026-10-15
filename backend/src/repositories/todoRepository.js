@@ -1,3 +1,17 @@
+const { ConflictError } = require('../errors');
+
+/**
+ * @typedef {object} Todo
+ * @property {string} id  lowercase v4 UUID
+ * @property {string} title
+ * @property {boolean} completed
+ * @property {'low'|'medium'|'high'} priority
+ * @property {string|null} dueDate
+ * @property {string} createdAt
+ * @property {string} updatedAt
+ */
+
+/** @returns {Todo} */
 function toTodo(row) {
   return {
     id: row.id,
@@ -17,8 +31,8 @@ function escapeLike(text) {
 function createTodoRepository(db) {
   const selectById = db.prepare('SELECT * FROM todos WHERE id = ?');
   const insert = db.prepare(
-    `INSERT INTO todos (title, completed, priority, due_date, created_at, updated_at)
-     VALUES (@title, @completed, @priority, @dueDate, @now, @now)`,
+    `INSERT INTO todos (id, title, completed, priority, due_date, created_at, updated_at)
+     VALUES (@id, @title, @completed, @priority, @dueDate, @now, @now)`,
   );
   const update = db.prepare(
     `UPDATE todos
@@ -44,7 +58,10 @@ function createTodoRepository(db) {
         params.push(`%${escapeLike(q)}%`);
       }
       const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-      const rows = db.prepare(`SELECT * FROM todos ${where} ORDER BY id ASC`).all(...params);
+      // rowid breaks created_at ties in insertion order (ids are random, so they cannot order rows).
+      const rows = db
+        .prepare(`SELECT * FROM todos ${where} ORDER BY created_at ASC, rowid ASC`)
+        .all(...params);
       return rows.map(toTodo);
     },
 
@@ -53,15 +70,24 @@ function createTodoRepository(db) {
       return row ? toTodo(row) : null;
     },
 
-    create({ title, completed, priority, dueDate }, now) {
-      const info = insert.run({
-        title,
-        completed: completed ? 1 : 0,
-        priority,
-        dueDate,
-        now,
-      });
-      return this.findById(Number(info.lastInsertRowid));
+    create({ id, title, completed, priority, dueDate }, now) {
+      try {
+        insert.run({
+          id,
+          title,
+          completed: completed ? 1 : 0,
+          priority,
+          dueDate,
+          now,
+        });
+      } catch (err) {
+        // Only a primary-key clash is a duplicate id; any other constraint failure stays a 500.
+        if (err.code === 'SQLITE_CONSTRAINT_PRIMARYKEY') {
+          throw new ConflictError(`Todo ${id} already exists`);
+        }
+        throw err;
+      }
+      return this.findById(id);
     },
 
     update(id, { title, completed, priority, dueDate }, now) {

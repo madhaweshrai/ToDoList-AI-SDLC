@@ -4,16 +4,23 @@ const PRIORITIES = ['low', 'medium', 'high'];
 const STATUSES = ['all', 'active', 'completed'];
 const TITLE_MAX = 200;
 const QUERY_MAX = 200;
+// Single server-side source for the id format. JS/todo-model.js mirrors it (a parity test guards drift).
+const UUID_V4_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
+const isUuidV4 = (value) => typeof value === 'string' && UUID_V4_RE.test(value);
 
 function isPlainObject(value) {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
+const ID_ERROR = { field: 'id', message: 'must be a lowercase v4 UUID' };
+
+/** Returns the raw path id unchanged when it is a lowercase v4 UUID. Never coerces. */
 function parseId(raw) {
-  if (typeof raw !== 'string' || !/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
-    throw new ValidationError('Invalid todo id', [{ field: 'id', message: 'must be a positive integer' }]);
+  if (!isUuidV4(raw)) {
+    throw new ValidationError('Invalid todo id', [{ ...ID_ERROR }]);
   }
-  return Number(raw);
+  return raw;
 }
 
 function isValidDate(value) {
@@ -61,13 +68,30 @@ function checkDueDate(value, errors) {
   return value;
 }
 
-function parseBody(body, { requireTitle }) {
+/**
+ * @typedef {object} CreateTodoRequest
+ * @property {string} [id]  lowercase v4 UUID; absent (undefined) lets the server generate one
+ * @property {string} title
+ * @property {boolean} [completed]
+ * @property {'low'|'medium'|'high'} [priority]
+ * @property {string|null} [dueDate]  YYYY-MM-DD
+ */
+
+function parseBody(body, { requireTitle, allowId = false }) {
   if (!isPlainObject(body)) {
     throw new ValidationError('Request body must be a JSON object');
   }
   const errors = [];
   const result = {};
 
+  // Only `undefined` means "absent": an explicit null or a non-string id is a client error.
+  if (allowId && body.id !== undefined) {
+    if (isUuidV4(body.id)) {
+      result.id = body.id;
+    } else {
+      errors.push({ ...ID_ERROR });
+    }
+  }
   if (body.title !== undefined || requireTitle) {
     const title = checkTitle(body.title, errors);
     if (title !== undefined) result.title = title;
@@ -94,7 +118,7 @@ function parseBody(body, { requireTitle }) {
   return result;
 }
 
-const parseCreateBody = (body) => parseBody(body, { requireTitle: true });
+const parseCreateBody = (body) => parseBody(body, { requireTitle: true, allowId: true });
 const parseUpdateBody = (body) => parseBody(body, { requireTitle: false });
 
 function parseListQuery(query = {}) {
@@ -133,6 +157,8 @@ module.exports = {
   PRIORITIES,
   STATUSES,
   TITLE_MAX,
+  UUID_V4_RE,
+  isUuidV4,
   parseId,
   parseCreateBody,
   parseUpdateBody,

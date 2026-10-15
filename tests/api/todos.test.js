@@ -1,6 +1,13 @@
 const request = require('supertest');
 const { openDatabase } = require('../../backend/src/db');
 const { createApp } = require('../../backend/src/app');
+const { UUID_V4_RE } = require('../../backend/src/validation');
+
+const CLIENT_ID = '3f2504e0-4f89-41d3-9a0c-0305e82c3301';
+const UNKNOWN_ID = '00000000-0000-4000-8000-000000009999';
+const UPPER_UUID = CLIENT_ID.toUpperCase();
+const V1_UUID = '3f2504e0-4f89-11d3-9a0c-0305e82c3301';
+const ID_ERROR = { field: 'id', message: 'must be a lowercase v4 UUID' };
 
 let db;
 let app;
@@ -33,7 +40,7 @@ describe('POST /api/todos', () => {
     const res = await request(app).post('/api/todos').send({ title: '  Buy milk  ' });
     expect(res.status).toBe(201);
     expect(res.body).toMatchObject({
-      id: expect.any(Number),
+      id: expect.stringMatching(UUID_V4_RE),
       title: 'Buy milk',
       completed: false,
       priority: 'medium',
@@ -158,12 +165,12 @@ describe('GET /api/todos/:id', () => {
   });
 
   it('returns 404 for an unknown id', async () => {
-    const res = await request(app).get('/api/todos/9999');
+    const res = await request(app).get(`/api/todos/${UNKNOWN_ID}`);
     expect(res.status).toBe(404);
     expect(res.body.error.message).toMatch(/not found/i);
   });
 
-  it.each(['abc', '0', '-1', '1.5', '1e3'])('returns 400 for invalid id %s', async (id) => {
+  it.each(['abc', '0', '1', '-1', '1.5', '1e3', UPPER_UUID, V1_UUID])('returns 400 for invalid id %s', async (id) => {
     const res = await request(app).get(`/api/todos/${id}`);
     expect(res.status).toBe(400);
   });
@@ -220,7 +227,7 @@ describe('PUT /api/todos/:id', () => {
   });
 
   it('returns 404 for an unknown id', async () => {
-    const res = await request(app).put('/api/todos/9999').send({ completed: true });
+    const res = await request(app).put(`/api/todos/${UNKNOWN_ID}`).send({ completed: true });
     expect(res.status).toBe(404);
   });
 
@@ -231,7 +238,7 @@ describe('PUT /api/todos/:id', () => {
 });
 
 describe('DELETE /api/todos/:id', () => {
-  it('deletes by id, even when titles are duplicated', async () => {
+  it('AC-2: deletes by id, even when titles are duplicated', async () => {
     const first = await createTodo({ title: 'Same' });
     const second = await createTodo({ title: 'Same' });
 
@@ -243,13 +250,83 @@ describe('DELETE /api/todos/:id', () => {
   });
 
   it('returns 404 for an unknown id', async () => {
-    const res = await request(app).delete('/api/todos/9999');
+    const res = await request(app).delete(`/api/todos/${UNKNOWN_ID}`);
     expect(res.status).toBe(404);
   });
 
   it('returns 400 for an invalid id', async () => {
     const res = await request(app).delete('/api/todos/abc');
     expect(res.status).toBe(400);
+  });
+});
+
+describe('AC-5: client-supplied UUID ids', () => {
+  it('AC-5: POST with a valid client id returns 201 with that id', async () => {
+    const res = await request(app).post('/api/todos').send({ id: CLIENT_ID, title: 'Client id' });
+    expect(res.status).toBe(201);
+    expect(res.body.id).toBe(CLIENT_ID);
+  });
+
+  it('AC-1: the stored todo is retrievable by the client id and listed with it', async () => {
+    await createTodo({ id: CLIENT_ID, title: 'Round trip' });
+    const one = await request(app).get(`/api/todos/${CLIENT_ID}`);
+    expect(one.status).toBe(200);
+    expect(one.body).toMatchObject({ id: CLIENT_ID, title: 'Round trip' });
+    const list = await request(app).get('/api/todos');
+    expect(list.body.map((t) => t.id)).toEqual([CLIENT_ID]);
+  });
+
+  it('NFR-3: POST without an id returns 201 with a server-generated v4 UUID', async () => {
+    const first = await createTodo({ title: 'No id' });
+    const second = await createTodo({ title: 'No id either' });
+    expect(first.id).toMatch(UUID_V4_RE);
+    expect(second.id).toMatch(UUID_V4_RE);
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it.each([
+    ['malformed', 'abc'],
+    ['upper case', UPPER_UUID],
+    ['v1', V1_UUID],
+    ['numeric', 5],
+    ['null', null],
+  ])('EH-1: POST with a %s id returns 400 with an id detail and stores nothing', async (_name, id) => {
+    const res = await request(app).post('/api/todos').send({ id, title: 'Bad id' });
+    expect(res.status).toBe(400);
+    expect(res.body).toEqual({ error: { message: 'Validation failed', details: [ID_ERROR] } });
+    const list = await request(app).get('/api/todos');
+    expect(list.body).toEqual([]);
+  });
+
+  it('EH-2: POST with a duplicate id returns 409 and leaves the original unchanged', async () => {
+    const original = await createTodo({ id: CLIENT_ID, title: 'Original', priority: 'high' });
+    const res = await request(app).post('/api/todos').send({ id: CLIENT_ID, title: 'Impostor' });
+    expect(res.status).toBe(409);
+    expect(res.body).toEqual({ error: { message: `Todo ${CLIENT_ID} already exists` } });
+    const list = await request(app).get('/api/todos');
+    expect(list.body).toEqual([original]);
+  });
+
+  it('EH-3: GET, PUT and DELETE return 400 for a malformed id and 404 for an unknown UUID', async () => {
+    const calls = [
+      (id) => request(app).get(`/api/todos/${id}`),
+      (id) => request(app).put(`/api/todos/${id}`).send({ completed: true }),
+      (id) => request(app).delete(`/api/todos/${id}`),
+    ];
+    for (const call of calls) {
+      const bad = await call(UPPER_UUID);
+      expect(bad.status).toBe(400);
+      expect(bad.body.error.details).toEqual([ID_ERROR]);
+      const unknown = await call(UNKNOWN_ID);
+      expect(unknown.status).toBe(404);
+    }
+  });
+
+  it('PUT ignores an id in the body and keeps the stored id', async () => {
+    await createTodo({ id: CLIENT_ID, title: 'Keep my id' });
+    const res = await request(app).put(`/api/todos/${CLIENT_ID}`).send({ id: UNKNOWN_ID, completed: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ id: CLIENT_ID, completed: true });
   });
 });
 
